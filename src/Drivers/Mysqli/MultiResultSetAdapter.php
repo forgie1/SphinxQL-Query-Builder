@@ -26,6 +26,21 @@ class MultiResultSetAdapter implements MultiResultSetAdapterInterface
         $this->connection = $connection;
     }
 
+    public function getAllAsArray(): array
+    {
+    	$connection = $this->connection->getConnection();
+
+    	$results = [];
+		do {
+			if ($res = $connection->store_result()) {
+				$results[] = $res->fetch_all(MYSQLI_ASSOC);
+				$res->free();
+			}
+		} while ($connection->more_results() && $connection->next_result());
+
+		return $results;
+    }
+
     /**
      * @inheritdoc
      * @throws ConnectionException

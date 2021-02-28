@@ -194,7 +194,12 @@ class MultiResultSet implements MultiResultSetInterface
         return $resultSet;
     }
 
-    /**
+    public function getAllAsArray(): array
+	{
+		return $this->adapter->getAllAsArray();
+	}
+
+	/**
      * @inheritdoc
      */
     public function store()

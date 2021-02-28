@@ -6,6 +6,13 @@ use Foolz\SphinxQL\Exception\DatabaseException;
 
 interface MultiResultSetInterface extends \ArrayAccess, \Iterator, \Countable
 {
+
+	/**
+	 * Returns all multi results
+	 * @return array
+	 */
+	public function getAllAsArray(): array;
+
     /**
      * Stores all the data in PHP and frees the data on the server
      *

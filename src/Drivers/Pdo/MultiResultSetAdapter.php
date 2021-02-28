@@ -26,6 +26,12 @@ class MultiResultSetAdapter implements MultiResultSetAdapterInterface
         $this->statement = $statement;
     }
 
+	public function getAllAsArray(): array
+	{
+		$results = [];
+		return $results;
+	}
+
     /**
      * @inheritdoc
      */
