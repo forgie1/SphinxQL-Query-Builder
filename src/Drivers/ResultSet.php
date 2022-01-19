@@ -7,384 +7,384 @@ use Foolz\SphinxQL\Exception\ResultSetException;
 
 class ResultSet implements ResultSetInterface
 {
-    /**
-     * @var int
-     */
-    protected $num_rows = 0;
+	/**
+	 * @var int
+	 */
+	protected $num_rows = 0;
 
-    /**
-     * @var int
-     */
-    protected $cursor = 0;
+	/**
+	 * @var int
+	 */
+	protected $cursor = 0;
 
-    /**
-     * @var int
-     */
-    protected $next_cursor = 0;
+	/**
+	 * @var int
+	 */
+	protected $next_cursor = 0;
 
-    /**
-     * @var int
-     */
-    protected $affected_rows = 0; // leave to 0 so SELECT etc. will be coherent
+	/**
+	 * @var int
+	 */
+	protected $affected_rows = 0; // leave to 0 so SELECT etc. will be coherent
 
-    /**
-     * @var array
-     */
-    protected $fields;
+	/**
+	 * @var array
+	 */
+	protected $fields;
 
-    /**
-     * @var null|array
-     */
-    protected $stored;
+	/**
+	 * @var null|array
+	 */
+	protected $stored;
 
-    /**
-     * @var null|array
-     */
-    protected $fetched;
+	/**
+	 * @var null|array
+	 */
+	protected $fetched;
 
-    /**
-     * @var ResultSetAdapterInterface
-     */
-    protected $adapter;
+	/**
+	 * @var ResultSetAdapterInterface
+	 */
+	protected $adapter;
 
-    /**
-     * @param ResultSetAdapterInterface $adapter
-     */
-    public function __construct(ResultSetAdapterInterface $adapter)
-    {
-        $this->adapter = $adapter;
-        $this->init();
+	/**
+	 * @param ResultSetAdapterInterface $adapter
+	 */
+	public function __construct(ResultSetAdapterInterface $adapter)
+	{
+		$this->adapter = $adapter;
+		$this->init();
 
-        if ($adapter instanceof PdoResultSetAdapter) { //only for pdo for some reason
-            $this->store();
-        }
-    }
+		if ($adapter instanceof PdoResultSetAdapter) { //only for pdo for some reason
+			$this->store();
+		}
+	}
 
-    /**
-     * @inheritdoc
-     */
-    public function hasRow($num)
-    {
-        return $num >= 0 && $num < $this->num_rows;
-    }
+	/**
+	 * @inheritdoc
+	 */
+	public function hasRow($num): bool
+	{
+		return $num >= 0 && $num < $this->num_rows;
+	}
 
-    /**
-     * @inheritdoc
-     */
-    public function hasNextRow()
-    {
-        return $this->cursor + 1 < $this->num_rows;
-    }
+	/**
+	 * @inheritdoc
+	 */
+	public function hasNextRow(): bool
+	{
+		return $this->cursor + 1 < $this->num_rows;
+	}
 
-    /**
-     * @inheritdoc
-     */
-    public function getAffectedRows()
-    {
-        return $this->affected_rows;
-    }
+	/**
+	 * @inheritdoc
+	 */
+	public function getAffectedRows(): int
+	{
+		return $this->affected_rows;
+	}
 
-    /**
-     * @inheritdoc
-     */
-    public function offsetExists($offset)
-    {
-        return $this->hasRow($offset);
-    }
+	/**
+	 * @inheritdoc
+	 */
+	public function offsetExists($offset): bool
+	{
+		return $this->hasRow($offset);
+	}
 
-    /**
-     * @inheritdoc
-     * @throws ResultSetException
-     */
-    public function offsetGet($offset)
-    {
-        return $this->toRow($offset)->fetchAssoc();
-    }
+	/**
+	 * @inheritdoc
+	 * @throws ResultSetException
+	 */
+	public function offsetGet(mixed $offset): mixed
+	{
+		return $this->toRow($offset)->fetchAssoc();
+	}
 
-    /**
-     * @inheritdoc
-     * @codeCoverageIgnore
-     */
-    public function offsetSet($offset, $value)
-    {
-        throw new \BadMethodCallException('Not implemented');
-    }
+	/**
+	 * @inheritdoc
+	 * @codeCoverageIgnore
+	 */
+	public function offsetSet(mixed $offset, mixed $value): void
+	{
+		throw new \BadMethodCallException('Not implemented');
+	}
 
-    /**
-     * @inheritdoc
-     * @codeCoverageIgnore
-     */
-    public function offsetUnset($offset)
-    {
-        throw new \BadMethodCallException('Not implemented');
-    }
+	/**
+	 * @inheritdoc
+	 * @codeCoverageIgnore
+	 */
+	public function offsetUnset(mixed $offset): void
+	{
+		throw new \BadMethodCallException('Not implemented');
+	}
 
-    /**
-     * @inheritdoc
-     */
-    public function current()
-    {
-        $row = $this->fetched;
-        unset($this->fetched);
+	/**
+	 * @inheritdoc
+	 */
+	public function current(): mixed
+	{
+		$row = $this->fetched;
+		unset($this->fetched);
 
-        return $row;
-    }
+		return $row;
+	}
 
-    /**
-     * @inheritdoc
-     */
-    public function next()
-    {
-        $this->fetched = $this->fetch(true);
-    }
+	/**
+	 * @inheritdoc
+	 */
+	public function next(): void
+	{
+		$this->fetched = $this->fetch(true);
+	}
 
-    /**
-     * @inheritdoc
-     */
-    public function key()
-    {
-        return (int)$this->cursor;
-    }
+	/**
+	 * @inheritdoc
+	 */
+	public function key(): string|float|int|bool|null
+	{
+		return (int)$this->cursor;
+	}
 
-    /**
-     * @inheritdoc
-     */
-    public function valid()
-    {
-        if ($this->stored !== null) {
-            return $this->hasRow($this->cursor);
-        }
+	/**
+	 * @inheritdoc
+	 */
+	public function valid(): bool
+	{
+		if ($this->stored !== null) {
+			return $this->hasRow($this->cursor);
+		}
 
-        return $this->adapter->valid();
-    }
+		return $this->adapter->valid();
+	}
 
-    /**
-     * @inheritdoc
-     */
-    public function rewind()
-    {
-        if ($this->stored === null) {
-            $this->adapter->rewind();
-        }
+	/**
+	 * @inheritdoc
+	 */
+	public function rewind(): void
+	{
+		if ($this->stored === null) {
+			$this->adapter->rewind();
+		}
 
-        $this->next_cursor = 0;
+		$this->next_cursor = 0;
 
-        $this->fetched = $this->fetch(true);
-    }
+		$this->fetched = $this->fetch(true);
+	}
 
-    /**
-     * Returns the number of rows in the result set
-     * @inheritdoc
-     */
-    public function count()
-    {
-        return $this->num_rows;
-    }
+	/**
+	 * Returns the number of rows in the result set
+	 * @inheritdoc
+	 */
+	public function count(): int
+	{
+		return $this->num_rows;
+	}
 
-    protected function init()
-    {
-        if ($this->adapter->isDml()) {
-            $this->affected_rows = $this->adapter->getAffectedRows();
-        } else {
-            $this->num_rows = $this->adapter->getNumRows();
-            $this->fields = $this->adapter->getFields();
-        }
-    }
+	protected function init()
+	{
+		if ($this->adapter->isDml()) {
+			$this->affected_rows = $this->adapter->getAffectedRows();
+		} else {
+			$this->num_rows = $this->adapter->getNumRows();
+			$this->fields = $this->adapter->getFields();
+		}
+	}
 
-    /**
-     * @param array $numeric_array
-     *
-     * @return array
-     */
-    protected function makeAssoc($numeric_array)
-    {
-        $assoc_array = array();
-        foreach ($numeric_array as $col_key => $col_value) {
-            $assoc_array[$this->fields[$col_key]->name] = $col_value;
-        }
+	/**
+	 * @param array $numeric_array
+	 *
+	 * @return array
+	 */
+	protected function makeAssoc($numeric_array)
+	{
+		$assoc_array = array();
+		foreach ($numeric_array as $col_key => $col_value) {
+			$assoc_array[$this->fields[$col_key]->name] = $col_value;
+		}
 
-        return $assoc_array;
-    }
+		return $assoc_array;
+	}
 
-    /**
-     * @param bool $assoc
-     *
-     * @return array|false|null
-     */
-    protected function fetchFromStore($assoc = true)
-    {
-        if ($this->stored === null) {
-            return false;
-        }
+	/**
+	 * @param bool $assoc
+	 *
+	 * @return array|false|null
+	 */
+	protected function fetchFromStore($assoc = true)
+	{
+		if ($this->stored === null) {
+			return false;
+		}
 
-        $row = isset($this->stored[$this->cursor]) ? $this->stored[$this->cursor] : null;
+		$row = isset($this->stored[$this->cursor]) ? $this->stored[$this->cursor] : null;
 
-        if ($row !== null) {
-            $row = $assoc ? $this->makeAssoc($row) : $row;
-        }
+		if ($row !== null) {
+			$row = $assoc ? $this->makeAssoc($row) : $row;
+		}
 
-        return $row;
-    }
+		return $row;
+	}
 
-    /**
-     * @param bool $assoc
-     * @return array|false
-     */
-    protected function fetchAllFromStore($assoc)
-    {
-        if ($this->stored === null) {
-            return false;
-        }
+	/**
+	 * @param bool $assoc
+	 * @return array|false
+	 */
+	protected function fetchAllFromStore($assoc)
+	{
+		if ($this->stored === null) {
+			return false;
+		}
 
-        $result_from_store = array();
+		$result_from_store = array();
 
-        $this->cursor = $this->next_cursor;
-        while ($row = $this->fetchFromStore($assoc)) {
-            $result_from_store[] = $row;
-            $this->cursor = ++$this->next_cursor;
-        }
+		$this->cursor = $this->next_cursor;
+		while ($row = $this->fetchFromStore($assoc)) {
+			$result_from_store[] = $row;
+			$this->cursor = ++$this->next_cursor;
+		}
 
-        return $result_from_store;
-    }
+		return $result_from_store;
+	}
 
-    /**
-     * @param bool $assoc
-     *
-     * @return array
-     */
-    protected function fetchAll($assoc = true): array
-    {
-        $fetch_all_result = $this->fetchAllFromStore($assoc);
+	/**
+	 * @param bool $assoc
+	 *
+	 * @return array
+	 */
+	protected function fetchAll($assoc = true): array
+	{
+		$fetch_all_result = $this->fetchAllFromStore($assoc);
 
-        if (!$fetch_all_result) {
-            $fetch_all_result = $this->adapter->fetchAll($assoc);
-        }
+		if (!$fetch_all_result) {
+			$fetch_all_result = $this->adapter->fetchAll($assoc);
+		}
 
-        $this->cursor = $this->num_rows;
-        $this->next_cursor = $this->cursor + 1;
+		$this->cursor = $this->num_rows;
+		$this->next_cursor = $this->cursor + 1;
 
-        return $fetch_all_result;
-    }
+		return $fetch_all_result;
+	}
 
-    /**
-     * @inheritdoc
-     */
-    public function store()
-    {
-        if ($this->stored !== null) {
-            return $this;
-        }
+	/**
+	 * @inheritdoc
+	 */
+	public function store(): self
+	{
+		if ($this->stored !== null) {
+			return $this;
+		}
 
-        if (!$this->adapter->isDml()) {
+		if (!$this->adapter->isDml()) {
 //            $this->stored = $this->affected_rows;
 //        } else {
-            $this->stored = $this->adapter->store();
-        }
+			$this->stored = $this->adapter->store();
+		}
 
-        return $this;
-    }
+		return $this;
+	}
 
-    /**
-     * @inheritdoc
-     */
-    public function getStored()
-    {
-        $this->store();
-        if ($this->adapter->isDml()) {
-            return $this->getAffectedRows();
-        }
+	/**
+	 * @inheritdoc
+	 */
+	public function getStored(): array|int
+	{
+		$this->store();
+		if ($this->adapter->isDml()) {
+			return $this->getAffectedRows();
+		}
 
-        return $this->fetchAllAssoc();
-    }
+		return $this->fetchAllAssoc();
+	}
 
-    /**
-     * @inheritdoc
-     */
-    public function toRow($num)
-    {
-        if (!$this->hasRow($num)) {
-            throw new ResultSetException('The row does not exist.');
-        }
+	/**
+	 * @inheritdoc
+	 */
+	public function toRow($num)
+	{
+		if (!$this->hasRow($num)) {
+			throw new ResultSetException('The row does not exist.');
+		}
 
-        $this->cursor = $num;
-        $this->next_cursor = $num;
+		$this->cursor = $num;
+		$this->next_cursor = $num;
 
-        if ($this->stored === null) {
-            $this->adapter->toRow($this->cursor);
-        }
+		if ($this->stored === null) {
+			$this->adapter->toRow($this->cursor);
+		}
 
-        return $this;
-    }
+		return $this;
+	}
 
-    /**
-     * @inheritdoc
-     */
-    public function toNextRow()
-    {
-        $this->toRow(++$this->cursor);
+	/**
+	 * @inheritdoc
+	 */
+	public function toNextRow(): self
+	{
+		$this->toRow(++$this->cursor);
 
-        return $this;
-    }
+		return $this;
+	}
 
-    /**
-     * @inheritdoc
-     */
-    public function fetchAllAssoc()
-    {
-        return $this->fetchAll(true);
-    }
+	/**
+	 * @inheritdoc
+	 */
+	public function fetchAllAssoc(): array
+	{
+		return $this->fetchAll(true);
+	}
 
-    /**
-     * @inheritdoc
-     */
-    public function fetchAllNum()
-    {
-        return $this->fetchAll(false);
-    }
+	/**
+	 * @inheritdoc
+	 */
+	public function fetchAllNum(): array
+	{
+		return $this->fetchAll(false);
+	}
 
-    /**
-     * @inheritdoc
-     */
-    public function fetchAssoc()
-    {
-        return $this->fetch(true);
-    }
+	/**
+	 * @inheritdoc
+	 */
+	public function fetchAssoc(): ?array
+	{
+		return $this->fetch(true);
+	}
 
-    /**
-     * @inheritdoc
-     */
-    public function fetchNum()
-    {
-        return $this->fetch(false);
-    }
+	/**
+	 * @inheritdoc
+	 */
+	public function fetchNum(): ?array
+	{
+		return $this->fetch(false);
+	}
 
-    /**
-     * @param bool $assoc
-     *
-     * @return array|null
-     */
-    protected function fetch($assoc = true): ?array
-    {
-        $this->cursor = $this->next_cursor;
+	/**
+	 * @param bool $assoc
+	 *
+	 * @return array|null
+	 */
+	protected function fetch($assoc = true): ?array
+	{
+		$this->cursor = $this->next_cursor;
 
-        $row = $this->fetchFromStore($assoc);
+		$row = $this->fetchFromStore($assoc);
 
-        if ($row === false) {
-            $row = $this->adapter->fetch($assoc);
-        }
+		if ($row === false) {
+			$row = $this->adapter->fetch($assoc);
+		}
 
-        $this->next_cursor++;
+		$this->next_cursor++;
 
-        return $row;
-    }
+		return $row;
+	}
 
-    /**
-     * @inheritdoc
-     */
-    public function freeResult()
-    {
-        $this->adapter->freeResult();
+	/**
+	 * @inheritdoc
+	 */
+	public function freeResult()
+	{
+		$this->adapter->freeResult();
 
-        return $this;
-    }
+		return $this;
+	}
 }
